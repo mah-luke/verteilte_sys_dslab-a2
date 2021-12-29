@@ -5,7 +5,6 @@ import dslab.nameserver.INameserverRemote;
 import dslab.nameserver.entity.NameserverEntity;
 import dslab.nameserver.exception.AlreadyRegisteredException;
 import dslab.nameserver.exception.InvalidDomainException;
-import dslab.util.Config;
 
 import java.rmi.RemoteException;
 
@@ -53,11 +52,13 @@ public class NameserverRemote implements INameserverRemote {
             String subdomain = domainThis == null? domain : domain.substring(domainThis.length());
             String[] subdomainSplit = subdomain.split("\\.");
 
+            // step into recursion
             if (subdomainSplit.length > 1) {
                 if (!entity.getZones().containsKey(subdomainSplit[0])) {
                     entity.getZones().get(subdomainSplit[0]).registerMailboxServer(domain, address);
                 } else throw new InvalidDomainException("Zone: " + subdomainSplit[0] + " not registered for Nameserver: " + domainThis);
             }
+            // base case
             else if (subdomainSplit.length == 1) {
                 if (!entity.getMailboxes().containsKey(subdomainSplit[0])) {
                     entity.getMailboxes().put(subdomainSplit[0], address);

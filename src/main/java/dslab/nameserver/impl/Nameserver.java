@@ -6,22 +6,27 @@ import java.rmi.*;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Arrays;
 
 import at.ac.tuwien.dsg.orvell.Shell;
+import at.ac.tuwien.dsg.orvell.annotation.Command;
 import dslab.ComponentFactory;
+import dslab.monitoring.MonitoringServer;
 import dslab.nameserver.INameserver;
 import dslab.nameserver.INameserverRemote;
 import dslab.nameserver.entity.NameserverEntity;
 import dslab.nameserver.exception.AlreadyRegisteredException;
 import dslab.nameserver.exception.InvalidDomainException;
 import dslab.util.Config;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class Nameserver implements INameserver {
 
     private final NameserverEntity entity;
     private final Shell shell;
     private  final INameserverRemote remote;
-
+    private final Log LOG = LogFactory.getLog(this.getClass().getName());
 
     /**
      * Creates a new server instance.
@@ -31,9 +36,11 @@ public class Nameserver implements INameserver {
      * @param in the input stream to read console input from
      * @param out the output stream to write console output to
      */
-    public Nameserver(String componentId, Config config, InputStream in, PrintStream out) {
+    public Nameserver(String componentId, Config config, InputStream in, PrintStream out) throws Exception {
         // TODO
         shell = new Shell(in, out);
+        shell.register(this);
+        shell.setPrompt(componentId + " >");
 
         entity = NameserverEntity.Builder.getInstance()
                 .setComponentId(componentId)
@@ -41,59 +48,73 @@ public class Nameserver implements INameserver {
                 .build();
 
         remote = new NameserverRemote(this, entity);
-
-        try {
-            // is server root?
-            if (!config.containsKey("domain")) {
-                Registry registry = LocateRegistry.createRegistry(config.getInt("registry.port"));
-
-                // bind remote to registry
-                try {
-                    registry.bind(config.getString("root_id"), remote);
-                } catch (AlreadyBoundException e) {
-                    System.err.println(e.getMessage());
-                }
-
-            }
-            // zone
-            else {
-                // lookup root Nameserver and register remote
-                Registry registry = LocateRegistry.getRegistry(config.getString("registry.host"), config.getInt("registry.port"));
-                try {
-                    NameserverRemote root = (NameserverRemote) registry.lookup(config.getString("root_id"));
-                    try {
-                       root.registerNameserver(config.getString("domain"), remote);
-                    } catch (AlreadyRegisteredException | InvalidDomainException e) {
-                        System.err.println(e);
-                    }
-                } catch (NotBoundException e) {
-                    System.err.println("No root server found! " + e);
-                }
-            }
-        } catch (RemoteException e) {
-            System.err.println(e);
-        }
-
     }
 
     @Override
     public void run() {
         // TODO
 
+        Config config = entity.getConfig();
+
+        try {
+        // is server root?
+            if (!config.containsKey("domain")) {
+                Registry registry = LocateRegistry.createRegistry(config.getInt("registry.port"));
+
+                // bind remote to registry
+                try {
+                    INameserverRemote exported = (INameserverRemote) UnicastRemoteObject.exportObject(remote, 0);
+                    registry.bind(config.getString("root_id"), remote);
+                } catch (AlreadyBoundException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            // zone
+            else {
+                // lookup root Nameserver and register remote
+                Registry registry = LocateRegistry.getRegistry(config.getString("registry.host"), config.getInt("registry.port"));
+                try {
+                    String rootId = config.getString("root_id");
+                    LOG.info(Arrays.toString(registry.list()));
+                    Remote r = registry.lookup(rootId);
+                    INameserverRemote root = (INameserverRemote) r;
+                    try {
+                        root.registerNameserver(config.getString("domain"), remote);
+                    } catch (AlreadyRegisteredException | InvalidDomainException e) {
+                        LOG.error(e);
+                    }
+                } catch (NotBoundException e) {
+                    LOG.error("No root server found! " + e);
+                }
+            }
+        } catch (RemoteException e) {
+            throw new RuntimeException(e);
+        }
+
+
+
+
+        LOG.info("Starting shell...");
+
         shell.run();
+
+        LOG.info("Shell stopped");
     }
 
     @Override
+    @Command
     public void nameservers() {
         // TODO
     }
 
     @Override
+    @Command
     public void addresses() {
         // TODO
     }
 
     @Override
+    @Command
     public void shutdown() {
         // TODO
 

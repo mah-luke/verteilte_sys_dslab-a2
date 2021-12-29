@@ -1,13 +1,8 @@
 package dslab.nameserver.entity;
 
 import dslab.nameserver.INameserverRemote;
-import dslab.nameserver.impl.NameserverRemote;
 import dslab.util.Config;
-
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Hashtable;
-import java.util.List;
 
 public class NameserverEntity {
 
@@ -15,12 +10,10 @@ public class NameserverEntity {
     private final Hashtable<String, String> mailboxes = new Hashtable<>();
     private final Hashtable<String, INameserverRemote> zones = new Hashtable<>();
     private final Config config;
-//    private final INameserverRemote remote;
 
     public NameserverEntity(Builder builder) {
         componentId = builder.componentId;
         config = builder.config;
-//        remote = builder.remote;
     }
 
     public String getComponentId() {
@@ -43,7 +36,6 @@ public class NameserverEntity {
 
         private String componentId;
         private Config config;
-//        private INameserverRemote remote;
 
         private Builder() {}
 
@@ -60,11 +52,6 @@ public class NameserverEntity {
             this.config = config;
             return this;
         }
-
-//        public Builder setRemote(INameserverRemote remote) {
-//            this.remote = remote;
-//            return this;
-//        }
 
         public NameserverEntity build() {
             return new NameserverEntity(this);
