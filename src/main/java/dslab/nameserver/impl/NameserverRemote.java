@@ -4,12 +4,17 @@ import dslab.nameserver.INameserverRemote;
 import dslab.nameserver.entity.NameserverEntity;
 import dslab.nameserver.exception.AlreadyRegisteredException;
 import dslab.nameserver.exception.InvalidDomainException;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
+import java.rmi.ConnectException;
+import java.rmi.NoSuchObjectException;
 import java.rmi.RemoteException;
 
 public class NameserverRemote implements INameserverRemote {
 
     private final NameserverEntity entity;
+    private final static Log LOG = LogFactory.getLog(NameserverRemote.class);
 
     public NameserverRemote(NameserverEntity entity) {
         this.entity = entity;
@@ -32,7 +37,7 @@ public class NameserverRemote implements INameserverRemote {
             if (subdomainSplit.length > 1) {
                 if (!entity.getZones().containsKey(next))
                     throw new InvalidDomainException("Zone: " + next + " not registered for Nameserver: " + domainThis);
-                entity.getZones().get(next).registerNameserver(domain, nameserver);
+                getNameserver(next).registerNameserver(domain, nameserver);
             }
 
             // base case
@@ -60,14 +65,15 @@ public class NameserverRemote implements INameserverRemote {
             if (subdomainSplit.length > 1) {
                 if (!entity.getZones().containsKey(next))
                     throw new InvalidDomainException("Zone: " + next + " not registered for Nameserver: " + domainThis);
-                entity.getZones().get(next).registerMailboxServer(domain, address);
+
+                getNameserver(next).registerMailboxServer(domain, address);
             }
 
             // base case
             else {
-                if (entity.getMailboxes().containsKey(next))
-                    throw new AlreadyRegisteredException("Mailbox: " + domain + " already registered");
-                entity.getMailboxes().put(next, address);
+                if (entity.getMailservers().containsKey(next))
+                    throw new AlreadyRegisteredException("Mailserver: " + domain + " already registered");
+                entity.getMailservers().put(next, address);
             }
         } else throw new InvalidDomainException("Registering subdomain '" + domain +
                 "' is not allowed for server with domain '" + domainThis + "'.");
@@ -80,6 +86,6 @@ public class NameserverRemote implements INameserverRemote {
 
     @Override
     public String lookup(String username) throws RemoteException {
-        return entity.getMailboxes().get(username);
+        return entity.getMailservers().get(username);
     }
 }

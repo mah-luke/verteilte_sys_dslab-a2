@@ -6,27 +6,21 @@ import java.rmi.*;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.Arrays;
-import java.util.Formatter;
 import java.util.Hashtable;
-import java.util.Set;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
-import java.util.logging.StreamHandler;
 
 import at.ac.tuwien.dsg.orvell.Shell;
+import at.ac.tuwien.dsg.orvell.StopShellException;
 import at.ac.tuwien.dsg.orvell.annotation.Command;
 import dslab.ComponentFactory;
-import dslab.monitoring.MonitoringServer;
 import dslab.nameserver.INameserver;
 import dslab.nameserver.INameserverRemote;
 import dslab.nameserver.entity.NameserverEntity;
 import dslab.nameserver.exception.AlreadyRegisteredException;
 import dslab.nameserver.exception.InvalidDomainException;
 import dslab.util.Config;
+import dslab.util.DomainResolver;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.commons.logging.impl.LogFactoryImpl;
 
 public class Nameserver implements INameserver, Runnable {
 
@@ -72,8 +66,10 @@ public class Nameserver implements INameserver, Runnable {
                 root = exported;
 
                 registry.bind(config.getString("root_id"), exported);
-            } catch (RemoteException | AlreadyBoundException e) {
-                throw new RuntimeException(e);
+            } catch (RemoteException e) {
+                throw new RuntimeException("Error while starting server.", e);
+            } catch(AlreadyBoundException e) {
+                LOG.error("Error while binding remote object to registry", e);
             }
         }
 
@@ -99,7 +95,7 @@ public class Nameserver implements INameserver, Runnable {
                 }
 
             } catch (RemoteException e) {
-                throw new RuntimeException(e);
+                LOG.error("Error while communicating with the server", e);
             } catch (NotBoundException e) {
                 LOG.error("Server root not found in registry ", e);
             }
@@ -136,7 +132,7 @@ public class Nameserver implements INameserver, Runnable {
         StringBuilder msg = new StringBuilder();
 
         Hashtable<String, String> mailboxes;
-        synchronized (mailboxes = entity.getMailboxes()) {
+        synchronized (mailboxes = entity.getMailservers()) {
             int cnt = 0;
             for (String key : mailboxes.keySet()) {
                 msg.append(++cnt).append(". ").append(key).append(" ").append(mailboxes.get(key)).append("\n");
@@ -176,6 +172,28 @@ public class Nameserver implements INameserver, Runnable {
             }
         }
 
+        throw new StopShellException();
+
+    }
+
+    @Command
+    public void create() {
+        try {
+            exported.registerMailboxServer("test.planet", "1234:123");
+        } catch (Exception e) {
+            LOG.error(e);
+        }
+    }
+
+    // TODO: remove me
+    @Command
+    public void find() {
+
+        try {
+            DomainResolver.resolve("test.planet", remote);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static void main(String[] args) throws Exception {

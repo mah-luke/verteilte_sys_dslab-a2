@@ -7,7 +7,7 @@ import java.util.Hashtable;
 public class NameserverEntity {
 
     private final String componentId;
-    private final Hashtable<String, String> mailboxes = new Hashtable<>();
+    private final Hashtable<String, String> mailservers = new Hashtable<>();
     private final Hashtable<String, INameserverRemote> zones = new Hashtable<>();
     private final Config config;
 
@@ -20,8 +20,8 @@ public class NameserverEntity {
         return componentId;
     }
 
-    public Hashtable<String, String> getMailboxes() {
-        return mailboxes;
+    public Hashtable<String, String> getMailservers() {
+        return mailservers;
     }
 
     public Hashtable<String, INameserverRemote> getZones() {
