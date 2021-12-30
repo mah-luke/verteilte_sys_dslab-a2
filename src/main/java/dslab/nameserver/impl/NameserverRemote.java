@@ -1,6 +1,5 @@
 package dslab.nameserver.impl;
 
-import dslab.nameserver.INameserver;
 import dslab.nameserver.INameserverRemote;
 import dslab.nameserver.entity.NameserverEntity;
 import dslab.nameserver.exception.AlreadyRegisteredException;
@@ -10,35 +9,38 @@ import java.rmi.RemoteException;
 
 public class NameserverRemote implements INameserverRemote {
 
-    private final INameserver nameserver;
     private final NameserverEntity entity;
 
-    public NameserverRemote(INameserver nameserver, NameserverEntity entity) {
-        this.nameserver = nameserver;
+    public NameserverRemote(NameserverEntity entity) {
         this.entity = entity;
     }
 
 
+    //todo fix inverse
     @Override
     public void registerNameserver(String domain, INameserverRemote nameserver) throws RemoteException, AlreadyRegisteredException, InvalidDomainException {
-        String domainThis = entity.getConfig().getString("domain");
+        String domainThis = entity.getConfig().containsKey("domain") ?
+                entity.getConfig().getString("domain") : "";
 
         // is registering of domain allowed? (domainThis is null for root)
-        if (domainThis == null || domain.startsWith(domainThis)) {
-            String subdomain = domainThis == null? domain : domain.substring(domainThis.length());
-            String[] subdomainSplit = subdomain.split("\\.");
+        if (domain.endsWith(domainThis)) {
+            String[] subdomainSplit = (domainThis.length() > 0? domain.substring(0, domainThis.length() - 1) : domain)
+                    .split("\\.");
+            String next = subdomainSplit[subdomainSplit.length-1];
 
+            // step into recursion
             if (subdomainSplit.length > 1) {
-                if (entity.getZones().containsKey(subdomainSplit[0])) {
-                    entity.getZones().get(subdomainSplit[0]).registerNameserver(domain, nameserver);
-                } else throw new InvalidDomainException("Zone: " + subdomainSplit[0] + " not registered for Nameserver: " + domainThis);
+                if (!entity.getZones().containsKey(next))
+                    throw new InvalidDomainException("Zone: " + next + " not registered for Nameserver: " + domainThis);
+                entity.getZones().get(next).registerNameserver(domain, nameserver);
             }
-            else if (subdomainSplit.length == 1){
-                if (!entity.getZones().containsKey(subdomainSplit[0])) {
-                    entity.getZones().put(subdomainSplit[0], nameserver);
-                } else throw new AlreadyRegisteredException("Domain: " + domain + " already registered");
+
+            // base case
+            else {
+                if (entity.getZones().containsKey(next))
+                    throw new AlreadyRegisteredException("Zone: " + domain + " already registered");
+                entity.getZones().put(next, nameserver);
             }
-            else throw new InvalidDomainException("Domain invalid: " + domain);
 
         } else throw new InvalidDomainException("Registering subdomain '" + domain +
                 "' is not allowed for server with domain '" + domainThis + "'.");
@@ -46,23 +48,26 @@ public class NameserverRemote implements INameserverRemote {
 
     @Override
     public void registerMailboxServer(String domain, String address) throws RemoteException, AlreadyRegisteredException, InvalidDomainException {
-        String domainThis = entity.getConfig().getString("domain");
+        String domainThis = entity.getConfig().containsKey("domain") ?
+                entity.getConfig().getString("domain") : "";
 
-        if (domainThis == null || domain.startsWith(domainThis)) {
-            String subdomain = domainThis == null? domain : domain.substring(domainThis.length());
-            String[] subdomainSplit = subdomain.split("\\.");
+        if (domain.endsWith(domainThis)) {
+            String[] subdomainSplit = (domainThis.length() > 0? domain.substring(0, domainThis.length() - 1) : domain)
+                    .split("\\.");
+            String next = subdomainSplit[subdomainSplit.length-1];
 
             // step into recursion
             if (subdomainSplit.length > 1) {
-                if (!entity.getZones().containsKey(subdomainSplit[0])) {
-                    entity.getZones().get(subdomainSplit[0]).registerMailboxServer(domain, address);
-                } else throw new InvalidDomainException("Zone: " + subdomainSplit[0] + " not registered for Nameserver: " + domainThis);
+                if (!entity.getZones().containsKey(next))
+                    throw new InvalidDomainException("Zone: " + next + " not registered for Nameserver: " + domainThis);
+                entity.getZones().get(next).registerMailboxServer(domain, address);
             }
+
             // base case
-            else if (subdomainSplit.length == 1) {
-                if (!entity.getMailboxes().containsKey(subdomainSplit[0])) {
-                    entity.getMailboxes().put(subdomainSplit[0], address);
-                } else throw new AlreadyRegisteredException("Mailbox: " + domain + " already registered");
+            else {
+                if (entity.getMailboxes().containsKey(next))
+                    throw new AlreadyRegisteredException("Mailbox: " + domain + " already registered");
+                entity.getMailboxes().put(next, address);
             }
         } else throw new InvalidDomainException("Registering subdomain '" + domain +
                 "' is not allowed for server with domain '" + domainThis + "'.");
@@ -75,6 +80,6 @@ public class NameserverRemote implements INameserverRemote {
 
     @Override
     public String lookup(String username) throws RemoteException {
-        return null;
+        return entity.getMailboxes().get(username);
     }
 }

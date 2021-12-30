@@ -7,6 +7,12 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Arrays;
+import java.util.Formatter;
+import java.util.Hashtable;
+import java.util.Set;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import java.util.logging.StreamHandler;
 
 import at.ac.tuwien.dsg.orvell.Shell;
 import at.ac.tuwien.dsg.orvell.annotation.Command;
@@ -20,13 +26,18 @@ import dslab.nameserver.exception.InvalidDomainException;
 import dslab.util.Config;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.commons.logging.impl.LogFactoryImpl;
 
-public class Nameserver implements INameserver {
+public class Nameserver implements INameserver, Runnable {
 
     private final NameserverEntity entity;
     private final Shell shell;
-    private  final INameserverRemote remote;
+    private INameserverRemote remote;
+    private INameserverRemote exported;
+    private INameserverRemote root;
     private final Log LOG = LogFactory.getLog(this.getClass().getName());
+
+    private Registry registry;
 
     /**
      * Creates a new server instance.
@@ -36,66 +47,70 @@ public class Nameserver implements INameserver {
      * @param in the input stream to read console input from
      * @param out the output stream to write console output to
      */
-    public Nameserver(String componentId, Config config, InputStream in, PrintStream out) throws Exception {
-        // TODO
-        shell = new Shell(in, out);
-        shell.register(this);
-        shell.setPrompt(componentId + " >");
-
+    public Nameserver(String componentId, Config config, InputStream in, PrintStream out) {
         entity = NameserverEntity.Builder.getInstance()
                 .setComponentId(componentId)
                 .setConfig(config)
                 .build();
 
-        remote = new NameserverRemote(this, entity);
+        shell = new Shell(in, out);
     }
 
     @Override
     public void run() {
-        // TODO
 
         Config config = entity.getConfig();
 
-        try {
-        // is server root?
-            if (!config.containsKey("domain")) {
-                Registry registry = LocateRegistry.createRegistry(config.getInt("registry.port"));
+        // root
+        if (!config.containsKey("domain")) {
 
-                // bind remote to registry
-                try {
-                    INameserverRemote exported = (INameserverRemote) UnicastRemoteObject.exportObject(remote, 0);
-                    registry.bind(config.getString("root_id"), remote);
-                } catch (AlreadyBoundException e) {
-                    throw new RuntimeException(e);
-                }
+            // bind remote to registry
+            try {
+                registry = LocateRegistry.createRegistry(config.getInt("registry.port"));
+                remote = new NameserverRemote(entity);
+                exported = (INameserverRemote) UnicastRemoteObject.exportObject(remote, 0);
+                root = exported;
+
+                registry.bind(config.getString("root_id"), exported);
+            } catch (RemoteException | AlreadyBoundException e) {
+                throw new RuntimeException(e);
             }
-            // zone
-            else {
-                // lookup root Nameserver and register remote
-                Registry registry = LocateRegistry.getRegistry(config.getString("registry.host"), config.getInt("registry.port"));
-                try {
-                    String rootId = config.getString("root_id");
-                    LOG.info(Arrays.toString(registry.list()));
-                    Remote r = registry.lookup(rootId);
-                    INameserverRemote root = (INameserverRemote) r;
-                    try {
-                        root.registerNameserver(config.getString("domain"), remote);
-                    } catch (AlreadyRegisteredException | InvalidDomainException e) {
-                        LOG.error(e);
-                    }
-                } catch (NotBoundException e) {
-                    LOG.error("No root server found! " + e);
-                }
-            }
-        } catch (RemoteException e) {
-            throw new RuntimeException(e);
         }
 
+        // zone
+        else {
+            // lookup root Nameserver and register remote
+            try {
+                registry = LocateRegistry.getRegistry(
+                        config.getString("registry.host"),
+                        config.getInt("registry.port")
+                );
+
+                root = (INameserverRemote) registry.lookup(config.getString("root_id"));
+
+                remote = new NameserverRemote(entity);
+                exported = (INameserverRemote) UnicastRemoteObject.exportObject(
+                        remote, 0);
+
+                try {
+                    root.registerNameserver(config.getString("domain"), exported);
+                } catch (AlreadyRegisteredException | InvalidDomainException e) {
+                    LOG.error(e);
+                }
+
+            } catch (RemoteException e) {
+                throw new RuntimeException(e);
+            } catch (NotBoundException e) {
+                LOG.error("Server root not found in registry ", e);
+            }
+        }
 
 
 
         LOG.info("Starting shell...");
 
+        shell.register(this);
+        shell.setPrompt(entity.getComponentId() + " >");
         shell.run();
 
         LOG.info("Shell stopped");
@@ -104,25 +119,63 @@ public class Nameserver implements INameserver {
     @Override
     @Command
     public void nameservers() {
-        // TODO
+        StringBuilder msg = new StringBuilder();
+
+        // TODO: synchronization for keyset iterator
+        int cnt = 0;
+        for (String key : entity.getZones().keySet()) {
+            msg.append(++cnt).append(". ").append(key).append("\n");
+        }
+
+        print(msg.toString());
     }
 
     @Override
     @Command
     public void addresses() {
-        // TODO
+        StringBuilder msg = new StringBuilder();
+
+        Hashtable<String, String> mailboxes;
+        synchronized (mailboxes = entity.getMailboxes()) {
+            int cnt = 0;
+            for (String key : mailboxes.keySet()) {
+                msg.append(++cnt).append(". ").append(key).append(" ").append(mailboxes.get(key)).append("\n");
+            }
+        }
+
+        print(msg.toString());
+
+    }
+
+    public void print(String msg) {
+        shell.out().println(msg);
     }
 
     @Override
     @Command
     public void shutdown() {
-        // TODO
 
+        // unexport remote
         try {
             UnicastRemoteObject.unexportObject(remote, true);
         } catch (NoSuchObjectException e) {
-            System.err.println(e);
+            throw new RuntimeException(e);
         }
+
+        // unbind root from registry
+        if (!entity.getConfig().containsKey("domain")) {
+            try {
+                registry.unbind(entity.getConfig().getString("root_id"));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            try {
+                UnicastRemoteObject.unexportObject(registry, true);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
     }
 
     public static void main(String[] args) throws Exception {
