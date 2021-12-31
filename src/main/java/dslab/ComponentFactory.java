@@ -10,7 +10,7 @@ import dslab.mailbox.MailboxServer;
 import dslab.monitoring.IMonitoringServer;
 import dslab.monitoring.MonitoringServer;
 import dslab.nameserver.INameserver;
-import dslab.nameserver.Nameserver;
+import dslab.nameserver.impl.Nameserver;
 import dslab.transfer.ITransferServer;
 import dslab.transfer.TransferServer;
 import dslab.util.Config;

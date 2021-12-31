@@ -1,5 +1,8 @@
 package dslab.nameserver;
 
+import dslab.nameserver.exception.AlreadyRegisteredException;
+import dslab.nameserver.exception.InvalidDomainException;
+
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 

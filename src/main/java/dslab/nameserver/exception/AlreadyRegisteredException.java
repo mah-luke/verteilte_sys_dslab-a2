@@ -1,4 +1,4 @@
-package dslab.nameserver;
+package dslab.nameserver.exception;
 
 public class AlreadyRegisteredException extends Exception {
     private static final long serialVersionUID = 1L;
