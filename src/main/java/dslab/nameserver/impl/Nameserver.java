@@ -18,7 +18,7 @@ import dslab.nameserver.entity.NameserverEntity;
 import dslab.nameserver.exception.AlreadyRegisteredException;
 import dslab.nameserver.exception.InvalidDomainException;
 import dslab.util.Config;
-import dslab.util.DomainResolver;
+import dslab.nameserver.DomainResolver;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 

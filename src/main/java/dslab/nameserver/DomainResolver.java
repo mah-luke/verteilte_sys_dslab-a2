@@ -1,6 +1,5 @@
-package dslab.util;
+package dslab.nameserver;
 
-import dslab.nameserver.INameserverRemote;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
