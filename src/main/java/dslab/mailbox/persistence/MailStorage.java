@@ -20,7 +20,7 @@ public class MailStorage {
 
             if (domain.equals(parts[1])){
                 storage.putIfAbsent(parts[0], Collections.synchronizedList(new ArrayList<>()));
-                storage.get(parts[0]).add(mail); // ASK does this need synchronization?
+                storage.get(parts[0]).add(mail);
             }
         }
     }

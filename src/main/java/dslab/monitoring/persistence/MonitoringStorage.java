@@ -14,13 +14,9 @@ public class MonitoringStorage {
 
     public void save(String host, String sender) {
 
-        synchronized (addresses) {
-            if (addresses.putIfAbsent(sender, 1L) != null) addresses.computeIfPresent(sender, (a, s) -> ++s);
-        }
+        if (addresses.putIfAbsent(sender, 1L) != null) addresses.computeIfPresent(sender, (a, s) -> ++s);
 
-        synchronized (servers) {
-            if (servers.putIfAbsent(host, 1L) != null) servers.computeIfPresent(host, (h, s) -> ++s);
-        }
+        if (servers.putIfAbsent(host, 1L) != null) servers.computeIfPresent(host, (h, s) -> ++s);
     }
 
     public AbstractMap<String, Long> getAddresses() {

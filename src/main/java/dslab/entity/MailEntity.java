@@ -1,9 +1,15 @@
 package dslab.entity;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import dslab.util.Keys;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 
 public class MailEntity {
     private String from;
@@ -45,6 +51,39 @@ public class MailEntity {
 
     public void setFrom(String from) {
         this.from = from;
+    }
+
+    public boolean checkHash(String hash) {
+        return hash().equals(hash);
+    }
+
+    public String hash() {
+//        File secretKeyFile = new File("Z:\\Benutzer\\Programming\\uni\\verteilte_sys\\dslab21-a2\\src\\main\\java\\dslab\\entity\\hmac.key");
+        File secretKeyFile = new File("keys/hmac.key");
+        try {
+            SecretKeySpec keySpec = Keys.readSecretKey(secretKeyFile);
+
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(keySpec);
+
+            // TODO: change to KEYS method call?
+            byte[] resBytes = mac.doFinal(value().getBytes());
+            return Base64.getEncoder().encodeToString(resBytes);
+        } catch (Exception e) {
+            // Don't catch as invalid setup would make it impossible to use the DMTP2.0 protocol at all
+            throw new RuntimeException("Error during hash creation", e);
+        }
+    }
+
+    public String value() {
+        List<String> list = new ArrayList<>();
+
+        list.add(from);
+        list.add(String.join(", ", to));
+        list.add(subject);
+        list.add(data);
+
+        return String.join("\n", list);
     }
 
     @Override

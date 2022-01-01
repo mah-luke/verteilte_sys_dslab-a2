@@ -2,6 +2,7 @@ package dslab.mailbox;
 
 import static org.hamcrest.CoreMatchers.containsString;
 
+import dslab.entity.MailEntity;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.After;
@@ -14,6 +15,9 @@ import dslab.JunitSocketClient;
 import dslab.Sockets;
 import dslab.TestBase;
 import dslab.util.Config;
+
+import java.util.HashSet;
+import java.util.Set;
 
 public class MailboxServerProtocolTest extends TestBase {
 
@@ -68,12 +72,22 @@ public class MailboxServerProtocolTest extends TestBase {
 
         // accept a message via DMTP (to trillian)
         try (JunitSocketClient client = new JunitSocketClient(dmtpServerPort, err)) {
+
+            Set<String> to = new HashSet<>();
+            to.add("trillian@earth.planet");
+            MailEntity mail = new MailEntity();
+            mail.setFrom("arthur@earth.planet");
+            mail.setTo(to);
+            mail.setSubject("hello");
+            mail.setData("hello from junit");
+
             client.verify("ok DMTP");
             client.sendAndVerify("begin", "ok");
             client.sendAndVerify("from arthur@earth.planet", "ok");
             client.sendAndVerify("to trillian@earth.planet", "ok 1");
             client.sendAndVerify("subject hello", "ok");
             client.sendAndVerify("data hello from junit", "ok");
+            client.sendAndVerify("hash " + mail.hash(), "ok");
             client.sendAndVerify("send", "ok");
             client.sendAndVerify("quit", "ok bye");
         }
