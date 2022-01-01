@@ -3,11 +3,17 @@ package dslab.nameserver;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
 
 public final class DomainResolver {
 
     private final static Log LOG = LogFactory.getLog(DomainResolver.class);
+
+    public static String resolve(String domain, String host, int port, String registeredName) throws RemoteException, NotBoundException {
+        return resolve(domain, (INameserverRemote) LocateRegistry.getRegistry(host, port).lookup(registeredName));
+    }
 
     public static String resolve(String domain, INameserverRemote root) throws RemoteException {
 
@@ -20,7 +26,7 @@ public final class DomainResolver {
 
         String address = cur.lookup(split[0]);
 
-        LOG.info("Found address for domain '" + domain + "': " + address);
+        LOG.info("Address registered for domain '" + domain + "': " + address);
 
         return address;
     }

@@ -42,8 +42,16 @@ public class NameserverRemote implements INameserverRemote {
 
             // base case
             else {
-                if (entity.getZones().containsKey(next))
-                    throw new AlreadyRegisteredException("Zone: " + domain + " already registered");
+                if (entity.getZones().containsKey(next)) {
+                    try {
+                        // call a method of nameserver to check if it's still up
+                        entity.getZones().get(next).getNameserver("");
+                        throw new AlreadyRegisteredException("Zone: " + domain + " already registered");
+                    } catch (RemoteException e) {
+                        // if old server is down replace with new server
+                        LOG.warn("Old server not available. Registering new server");
+                    }
+                }
                 entity.getZones().put(next, nameserver);
             }
 

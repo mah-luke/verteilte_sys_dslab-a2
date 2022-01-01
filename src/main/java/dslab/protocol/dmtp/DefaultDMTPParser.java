@@ -35,4 +35,9 @@ public class DefaultDMTPParser implements DMTPParser{
     public String data(String data) {
         return data;
     }
+
+    @Override
+    public String hash(String hash) {
+        return hash;
+    }
 }

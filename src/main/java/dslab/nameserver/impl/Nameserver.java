@@ -66,6 +66,7 @@ public class Nameserver implements INameserver, Runnable {
                 root = exported;
 
                 registry.bind(config.getString("root_id"), exported);
+                LOG.info("Server available as root from registry");
             } catch (RemoteException e) {
                 throw new RuntimeException("Error while starting server.", e);
             } catch(AlreadyBoundException e) {
@@ -84,12 +85,15 @@ public class Nameserver implements INameserver, Runnable {
 
                 root = (INameserverRemote) registry.lookup(config.getString("root_id"));
 
+                LOG.info("Root Nameserver found");
+
                 remote = new NameserverRemote(entity);
                 exported = (INameserverRemote) UnicastRemoteObject.exportObject(
                         remote, 0);
 
                 try {
                     root.registerNameserver(config.getString("domain"), exported);
+                    LOG.info("Registration on root successful");
                 } catch (AlreadyRegisteredException | InvalidDomainException e) {
                     LOG.error(e);
                 }
@@ -101,9 +105,7 @@ public class Nameserver implements INameserver, Runnable {
             }
         }
 
-
-
-        LOG.info("Starting shell...");
+        LOG.info("Startup complete. Starting shell...");
 
         shell.register(this);
         shell.setPrompt(entity.getComponentId() + " >");

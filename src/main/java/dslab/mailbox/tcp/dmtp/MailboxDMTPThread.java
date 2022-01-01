@@ -11,9 +11,6 @@ import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.net.SocketException;
 
-
-// ASK: parsing server to threads bad practise?
-
 public class MailboxDMTPThread implements Runnable {
 
     private final Socket socket;
@@ -43,6 +40,8 @@ public class MailboxDMTPThread implements Runnable {
             LOG.info("SocketException while handling socket: " + e.getMessage());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } catch (SecurityException e) {
+            LOG.warn(e);
         } finally {
             if (socket != null && !socket.isClosed()) {
                 try {

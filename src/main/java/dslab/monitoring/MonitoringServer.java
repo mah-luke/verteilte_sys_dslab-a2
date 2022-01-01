@@ -13,7 +13,6 @@ import at.ac.tuwien.dsg.orvell.annotation.Command;
 import dslab.ComponentFactory;
 import dslab.monitoring.persistence.MonitoringStorage;
 import dslab.monitoring.udp.MonitoringThread;
-import dslab.transfer.tcp.dmtp.DMTPClientThread;
 import dslab.util.Config;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

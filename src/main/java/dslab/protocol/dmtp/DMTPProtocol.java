@@ -4,13 +4,11 @@ import dslab.entity.MailEntity;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.ProtocolException;
 import java.net.Socket;
 import java.net.SocketException;
+import java.security.InvalidKeyException;
 import java.util.Set;
 
 public class DMTPProtocol {
@@ -28,13 +26,14 @@ public class DMTPProtocol {
         this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         this.writer = new PrintWriter(socket.getOutputStream());
 
-        writer.println("ok DMTP");
+        writer.println("ok DMTP2.0");
         writer.flush();
     }
 
     public MailEntity process() throws IOException {
 
         String request;
+        String hash = null;
         MailEntity mailEntity = null;
         while ((request = reader.readLine()) != null) {
 
@@ -52,6 +51,7 @@ public class DMTPProtocol {
                     writer.println("ok");
                     writer.flush();
                 } else if (command.equals("send")) {
+
                     if (parts.length != 1) throw new ProtocolException("Command 'send' expected no arguments");
                     if (mailEntity == null || !mailEntity.isComplete())
                         throw new ProtocolException("Creation not finished");
@@ -60,6 +60,16 @@ public class DMTPProtocol {
                     mailEntity = null;
                     writer.println("ok");
                     writer.flush();
+
+                    // ASK: Check for hash if hash was given during transmission
+                    //  (given test requires possibility to send without hash)
+                    if (hash == null) LOG.warn("No hash was given for transmission (deprecated from DMTP1). " +
+                            "Future versions may require the new DMTP2.0 format with a hash.");
+                    else {
+                        if (!ret.checkHash(hash)) throw new SecurityException("Hash not compatible with Mail");
+                        else LOG.info("Transmission successfully authenticated via hash.");
+                    }
+
                     return ret;
                 } else if (command.equals("quit")) {
                     if (parts.length != 1) throw new ProtocolException("Command 'quit' expected no arguments");
@@ -86,6 +96,9 @@ public class DMTPProtocol {
                                 break;
                             case "from":
                                 mailEntity.setFrom(parser.from(content));
+                                break;
+                            case "hash":
+                                hash = parser.hash(content);
                                 break;
                         }
 

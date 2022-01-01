@@ -12,4 +12,6 @@ public interface DMTPParser {
     String subject(String subject);
 
     String data(String data);
+
+    String hash(String content);
 }

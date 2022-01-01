@@ -39,6 +39,7 @@ public class DMTPClientThread implements Runnable {
                 send("to " + String.join(", ", mail.getTo()), reader, writer);
                 send("subject " + mail.getSubject(), reader, writer);
                 send("data " + mail.getData(), reader, writer);
+                send("hash " + mail.hash(), reader, writer);
                 send("send", reader, writer);
                 send("quit", reader, writer);
             }
