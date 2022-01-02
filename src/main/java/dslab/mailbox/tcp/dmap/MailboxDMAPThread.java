@@ -2,15 +2,23 @@ package dslab.mailbox.tcp.dmap;
 
 import dslab.mailbox.persistence.MailStorage;
 import dslab.entity.MailEntity;
+import dslab.security.SecureChannelServer;
 import dslab.util.Config;
+import dslab.util.Keys;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.net.ProtocolException;
 import java.net.Socket;
 import java.net.SocketException;
+import java.nio.charset.StandardCharsets;
+import java.security.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
 public class MailboxDMAPThread implements Runnable {
@@ -21,9 +29,12 @@ public class MailboxDMAPThread implements Runnable {
     private String loggedInUser;
     private final Config userConfig;
     private final Log LOG = LogFactory.getLog(MailboxDMAPListenerThread.class);
+    private SecureChannelServer secureChannel = null;
+    private final String componentId;
 
-    public MailboxDMAPThread(Socket socket, Config config, MailStorage storage) {
+    public MailboxDMAPThread(Socket socket, Config config, MailStorage storage, String componentId) {
         this.socket = socket;
+        this.componentId = componentId;
 
         this.config = config;
         this.storage = storage;
@@ -35,26 +46,38 @@ public class MailboxDMAPThread implements Runnable {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             PrintWriter writer = new PrintWriter(socket.getOutputStream());
 
-            writer.println("ok DMAP");
+            writer.println("ok DMAP2.0");
             writer.flush();
 
             String request;
             while ((request = reader.readLine()) != null) {
-                LOG.info("Client sent request: " + request);
+                LOG.info("Client sent request (raw): " + request);
+
+                if (secureChannel != null) {
+                    request = secureChannel.decrypt(request);
+                    LOG.info("Client sent request (decrypted): " + request);
+                }
 
                 String[] parts = request.strip().split("\\s");
                 String command = parts[0];
                 String response = "error";
 
                 try {
-                    if (command.equals("quit")){
+                    if (command.equals("startsecure")) {
+                        try {
+                            secureChannel = handshake(writer, reader);
+                        } catch (Exception e) {
+                            throw new SecurityException("Handshake failed", e);
+                        }
+                    }
+                    else if (command.equals("quit")){
                         response = "ok bye";
                         loggedInUser = null;
                         writer.println(response);
                         writer.flush();
                         socket.close();
                     }
-                    if (command.equals("login")) {
+                    else if (command.equals("login")) {
                         if (parts.length != 3) throw new ProtocolException("2 arguments expected");
 
                         if (userConfig.containsKey(parts[1])) {
@@ -117,6 +140,13 @@ public class MailboxDMAPThread implements Runnable {
                     response = String.format("error %s", e.getMessage());
                 }
 
+                LOG.info("Response (plain): " + response);
+
+                if (secureChannel != null) {
+                    response = secureChannel.encrypt(response);
+                    LOG.info("Response (encrypted): " + response);
+                }
+
                 writer.println(response);
                 writer.flush();
             }
@@ -125,6 +155,8 @@ public class MailboxDMAPThread implements Runnable {
              LOG.info("SocketException while handling socket: " + e.getMessage());
         } catch (IOException e) {
             throw new UncheckedIOException(e.getMessage(), e);
+        } catch (SecurityException e) {
+            LOG.warn("Handshake failed, terminating connection.", e);
         } finally {
             if (socket != null && !socket.isClosed()) {
                 try {
@@ -134,5 +166,78 @@ public class MailboxDMAPThread implements Runnable {
                 }
             }
         }
+    }
+
+    private SecureChannelServer handshake(PrintWriter writer, BufferedReader reader) throws
+            IOException, NoSuchPaddingException, NoSuchAlgorithmException,
+            InvalidAlgorithmParameterException, InvalidKeyException,
+            IllegalBlockSizeException, BadPaddingException {
+
+
+
+        // send (plain) ok <component-id> -> find server's pub key
+        writer.println("ok " + componentId);
+        writer.flush();
+
+        // get  (RSA) ok <client-challenge> <secret-key> <iv> -> server decrypts with private
+        String resolvedChallenge = solveChallenge(reader.readLine());
+        String[] split = resolvedChallenge.split("\\s");
+
+        if (!split[0].equals("ok") || split.length != 4) throw new IllegalArgumentException("Illegal challenge request");
+
+        secureChannel = new SecureChannelServer(
+                new SecretKeySpec(Base64.getDecoder().decode(split[2]), "AES"),
+                split[3].getBytes());
+
+        // send (AES) ok <client-challenge> -> send decrypted challenge back
+        String response = secureChannel.encrypt("ok " + split[2]);
+        LOG.info("Sending solved challenge: " + response);
+        writer.println(secureChannel.encrypt("ok " + split[2]));
+        writer.flush();
+
+        // get  (AES) ok -> client accepts handshake
+        String request = secureChannel.decrypt(reader.readLine());
+
+        if (!request.equals("ok")) throw new SecurityException("Handshake accept contained wrong response");
+
+        return secureChannel;
+    }
+
+    private String solveChallenge(String challenge) throws
+            NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException,
+            IllegalBlockSizeException, BadPaddingException, IOException {
+
+        LOG.info("Solving challenge: " + challenge);
+
+        PrivateKey privateKey = Keys.readPrivateKey(new File("keys/server/" + componentId + ".der"));
+
+        Cipher decrypterRSA = Cipher.getInstance("RSA");
+        decrypterRSA.init(Cipher.DECRYPT_MODE, privateKey);
+
+//        try {
+//            String testing = test();
+//            LOG.warn(testing);
+//            byte[] bytes = decrypterRSA.doFinal(Base64.getDecoder().decode(testing));
+//            LOG.warn("Decoded: " + new String(bytes, StandardCharsets.UTF_8));
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+
+        byte[] bytes = decrypterRSA.doFinal(Base64.getDecoder().decode(challenge));
+        String decrypted = new String(bytes, StandardCharsets.UTF_8);
+
+        LOG.info("Decrypted challenge: " + decrypted);
+        return decrypted;
+    }
+
+    private String test() throws Exception{
+        String val = "test 1234 heute teste ich juhu";
+
+        PublicKey publicKey = Keys.readPublicKey(new File("keys/client/mailbox-earth-planet_pub.der"));
+        Cipher encrypterRSA = Cipher.getInstance("RSA");
+        encrypterRSA.init(Cipher.ENCRYPT_MODE, publicKey);
+
+        byte[] encryptedBytes = encrypterRSA.doFinal(val.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(encryptedBytes);
     }
 }

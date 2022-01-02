@@ -20,11 +20,13 @@ public class MailboxDMAPListenerThread extends Thread {
     private final Log LOG = LogFactory.getLog(MailboxDMAPListenerThread.class);
     private final MailStorage storage;
     private final Config config;
+    private final String componentId;
 
-    public MailboxDMAPListenerThread(ServerSocket serverSocket, Config config, MailStorage storage) {
+    public MailboxDMAPListenerThread(ServerSocket serverSocket, Config config, MailStorage storage, String componentId) {
         this.config = config;
         this.storage = storage;
         this.serverSocket = serverSocket;
+        this.componentId = componentId;
     }
 
     @Override
@@ -33,7 +35,7 @@ public class MailboxDMAPListenerThread extends Thread {
             while (!serverSocket.isClosed()) {
                 Socket socket = serverSocket.accept();
                 LOG.info("Accepted socket: " + socket);
-                executor.execute(new MailboxDMAPThread(socket, config, storage));
+                executor.execute(new MailboxDMAPThread(socket, config, storage, componentId));
             }
         } catch (SocketException e) {
             LOG.info("Stopping listener because Server Socket was closed.");

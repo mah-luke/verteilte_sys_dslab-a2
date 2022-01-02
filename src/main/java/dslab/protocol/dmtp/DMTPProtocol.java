@@ -8,7 +8,6 @@ import java.io.*;
 import java.net.ProtocolException;
 import java.net.Socket;
 import java.net.SocketException;
-import java.security.InvalidKeyException;
 import java.util.Set;
 
 public class DMTPProtocol {
@@ -63,7 +62,7 @@ public class DMTPProtocol {
 
                     // ASK: Check for hash if hash was given during transmission
                     //  (given test requires possibility to send without hash)
-                    if (hash == null) LOG.warn("No hash was given for transmission (deprecated from DMTP1). " +
+                    if (hash == null) LOG.warn("No hash was given for transmission (deprecated from DMTP1.0). " +
                             "Future versions may require the new DMTP2.0 format with a hash.");
                     else {
                         if (!ret.checkHash(hash)) throw new SecurityException("Hash not compatible with Mail");

@@ -58,7 +58,6 @@ public class MailEntity {
     }
 
     public String hash() {
-//        File secretKeyFile = new File("Z:\\Benutzer\\Programming\\uni\\verteilte_sys\\dslab21-a2\\src\\main\\java\\dslab\\entity\\hmac.key");
         File secretKeyFile = new File("keys/hmac.key");
         try {
             SecretKeySpec keySpec = Keys.readSecretKey(secretKeyFile);
@@ -66,7 +65,6 @@ public class MailEntity {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(keySpec);
 
-            // TODO: change to KEYS method call?
             byte[] resBytes = mac.doFinal(value().getBytes());
             return Base64.getEncoder().encodeToString(resBytes);
         } catch (Exception e) {
