@@ -67,7 +67,7 @@ public class MailboxServer implements IMailboxServer, Runnable {
 
             // DMAP server
             dmapServerSocket = new ServerSocket(config.getInt("dmap.tcp.port"));
-            dmapListener = new MailboxDMAPListenerThread(dmapServerSocket, config, storage);
+            dmapListener = new MailboxDMAPListenerThread(dmapServerSocket, config, storage, componentId);
             dmapListener.start();
             LOG.info("Mailbox DMAP serverSocket is up: " + dmapServerSocket.getLocalSocketAddress());
         } catch (IOException e) {

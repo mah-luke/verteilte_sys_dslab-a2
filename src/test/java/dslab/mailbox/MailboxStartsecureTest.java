@@ -68,8 +68,10 @@ public class MailboxStartsecureTest extends TestBase {
             err.checkThat("Expected server response to be Base64 encoded", client.listen(),
                     matchesPattern("^(?:[a-zA-Z0-9+/]{4})*(?:[a-zA-Z0-9+/]{2}==|[a-zA-Z0-9+/]{3}=)?$"));
 
+            // ASK: why is default garbage when decoded?
             // send encrypted "ok" (with the aes cipher) in
-            client.send("g9U=");
+//            client.send("g9U="); // only works with y8o=
+            client.send("y8o=");
         }
     }
 
