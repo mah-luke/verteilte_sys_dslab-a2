@@ -190,9 +190,7 @@ public class MailboxDMAPThread implements Runnable {
                 Base64.getDecoder().decode(split[3]));
 
         // send (AES) ok <client-challenge> -> send decrypted challenge back
-        String response = aesCipher.encrypt("ok " +
-                split[1]);
-//                new String(Base64.getDecoder().decode(split[1]), StandardCharsets.UTF_8));
+        String response = aesCipher.encrypt("ok " + split[1]);
         LOG.info("Sending solved challenge: " + response);
         writer.println(response);
         writer.flush();
@@ -202,13 +200,6 @@ public class MailboxDMAPThread implements Runnable {
         LOG.info("Handshake accept (encrypted): " + request);
         request = aesCipher.decrypt(request);
         LOG.info("Handshake accept (decrypted): " + request);
-
-//        String test = "testing";
-//        LOG.info(test);
-//        String testEncrypted = aesCipher.encrypt(test);
-//        LOG.info(testEncrypted);
-//        String testDecrypted = aesCipher.decrypt(testEncrypted);
-//        LOG.info("Decrypted: " + testDecrypted);
 
         if (!request.equals("ok")) throw new SecurityException("Handshake accept contained wrong response");
 
@@ -226,30 +217,10 @@ public class MailboxDMAPThread implements Runnable {
         Cipher decrypterRSA = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         decrypterRSA.init(Cipher.DECRYPT_MODE, privateKey);
 
-//        try {
-//            String testing = test();
-//            LOG.warn(testing);
-//            byte[] bytes = decrypterRSA.doFinal(Base64.getDecoder().decode(testing));
-//            LOG.warn("Decoded: " + new String(bytes, StandardCharsets.UTF_8));
-//        } catch (Exception e) {
-//            throw new RuntimeException(e);
-//        }
-
         byte[] bytes = decrypterRSA.doFinal(Base64.getDecoder().decode(challenge));
         String decrypted = new String(bytes, StandardCharsets.UTF_8);
 
         LOG.info("Decrypted challenge: " + decrypted);
         return decrypted;
-    }
-
-    private String test() throws Exception{
-        String val = "test 1234 heute teste ich juhu";
-
-        PublicKey publicKey = Keys.readPublicKey(new File("keys/client/mailbox-earth-planet_pub.der"));
-        Cipher encrypterRSA = Cipher.getInstance("RSA");
-        encrypterRSA.init(Cipher.ENCRYPT_MODE, publicKey);
-
-        byte[] encryptedBytes = encrypterRSA.doFinal(val.getBytes(StandardCharsets.UTF_8));
-        return Base64.getEncoder().encodeToString(encryptedBytes);
     }
 }
