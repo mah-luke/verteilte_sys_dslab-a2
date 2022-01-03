@@ -2,7 +2,7 @@ package dslab.mailbox.tcp.dmap;
 
 import dslab.mailbox.persistence.MailStorage;
 import dslab.entity.MailEntity;
-import dslab.security.SecureChannelServer;
+import dslab.security.AESCipher;
 import dslab.util.Config;
 import dslab.util.Keys;
 import org.apache.commons.logging.Log;
@@ -17,7 +17,6 @@ import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
@@ -29,7 +28,7 @@ public class MailboxDMAPThread implements Runnable {
     private String loggedInUser;
     private final Config userConfig;
     private final Log LOG = LogFactory.getLog(MailboxDMAPListenerThread.class);
-    private SecureChannelServer secureChannel = null;
+    private AESCipher aesCipher = null;
     private final String componentId;
 
     public MailboxDMAPThread(Socket socket, Config config, MailStorage storage, String componentId) {
@@ -53,8 +52,8 @@ public class MailboxDMAPThread implements Runnable {
             while ((request = reader.readLine()) != null) {
                 LOG.info("Client sent request (raw): " + request);
 
-                if (secureChannel != null) {
-                    request = secureChannel.decrypt(request);
+                if (aesCipher != null) {
+                    request = aesCipher.decrypt(request);
                     LOG.info("Client sent request (decrypted): " + request);
                 }
 
@@ -62,93 +61,95 @@ public class MailboxDMAPThread implements Runnable {
                 String command = parts[0];
                 String response = "error";
 
-                try {
-                    if (command.equals("startsecure")) {
-                        try {
-                            secureChannel = handshake(writer, reader);
-                        } catch (Exception e) {
-                            throw new SecurityException("Handshake failed", e);
-                        }
+                if (command.equals("startsecure")) {
+                    try {
+                        aesCipher = handshake(writer, reader);
+                    } catch (Exception e) {
+                        throw new SecurityException("Handshake failed", e);
                     }
-                    else if (command.equals("quit")){
-                        response = "ok bye";
-                        loggedInUser = null;
-                        writer.println(response);
-                        writer.flush();
-                        socket.close();
-                    }
-                    else if (command.equals("login")) {
-                        if (parts.length != 3) throw new ProtocolException("2 arguments expected");
+                }
+                else {
+                    try {
+                        if (command.equals("quit")) {
+                            response = "ok bye";
+                            loggedInUser = null;
+                            writer.println(response);
+                            writer.flush();
+                            socket.close();
+                        } else if (command.equals("login")) {
+                            if (parts.length != 3) throw new ProtocolException("2 arguments expected");
 
-                        if (userConfig.containsKey(parts[1])) {
-                            if (userConfig.getString(parts[1]).equals(parts[2])){
-                                loggedInUser = parts[1];
-                                response = "ok";
-                            }
-                            else
-                                throw new ProtocolException("wrong password");
-                        } else {
-                            throw new ProtocolException("unknown user");
-                        }
-                    } else {
-
-                        if (loggedInUser == null) throw new ProtocolException("not logged in");
-
-                        List<MailEntity> mails;
-                        switch (command) {
-                            case "list":
-                                if (parts.length != 1) throw new ProtocolException("0 arguments expected");
-                                synchronized (mails = storage.retrieve(loggedInUser)) {
-                                    List<String> entries = new ArrayList<>();
-                                    for (int i = 0; i < mails.size(); i++) {
-                                        MailEntity mail = mails.get(i);
-                                        entries.add(String.format("%d %s %s", i + 1, mail.getFrom(), mail.getSubject()));
-                                    }
-                                    response = String.join("\n", entries);
-                                }
-                                break;
-                            case "logout":
-                                response = "ok";
-                                loggedInUser = null;
-                                break;
-                            case "show":
-                                if (parts.length != 2) throw new ProtocolException("1 argument expected");
-                                try {
-                                    int id = Integer.parseInt(parts[1]);
-                                     mails = storage.retrieve(loggedInUser);
-                                     if (id > mails.size() || id < 1) throw new ProtocolException("unknown message id");
-                                     response = mails.get(id - 1).toString();
-                                } catch (NumberFormatException e) {
-                                    throw new ProtocolException("message id not a number");
-                                }
-                                break;
-                            case "delete":
-                                if (parts.length != 2) throw new ProtocolException("1 argument expected");
-                                try {
-                                    int id = Integer.parseInt(parts[1]);
-                                    mails = storage.retrieve(loggedInUser);
-                                    if (id > mails.size() || id < 1) throw new ProtocolException("unknown message id");
-                                    mails.remove(id - 1);
+                            if (userConfig.containsKey(parts[1])) {
+                                if (userConfig.getString(parts[1]).equals(parts[2])) {
+                                    loggedInUser = parts[1];
                                     response = "ok";
-                                } catch (NumberFormatException e) {
-                                    throw new ProtocolException("message id not a number");
-                                }
-                                break;
+                                } else
+                                    throw new ProtocolException("wrong password");
+                            } else {
+                                throw new ProtocolException("unknown user");
+                            }
+                        } else {
+
+                            if (loggedInUser == null) throw new ProtocolException("not logged in");
+
+                            List<MailEntity> mails;
+                            switch (command) {
+                                case "list":
+                                    if (parts.length != 1) throw new ProtocolException("0 arguments expected");
+                                    synchronized (mails = storage.retrieve(loggedInUser)) {
+                                        List<String> entries = new ArrayList<>();
+                                        for (int i = 0; i < mails.size(); i++) {
+                                            MailEntity mail = mails.get(i);
+                                            entries.add(String.format("%d %s %s", i + 1, mail.getFrom(), mail.getSubject()));
+                                        }
+                                        response = String.join("\n", entries);
+                                    }
+                                    break;
+                                case "logout":
+                                    response = "ok";
+                                    loggedInUser = null;
+                                    break;
+                                case "show":
+                                    if (parts.length != 2) throw new ProtocolException("1 argument expected");
+                                    try {
+                                        int id = Integer.parseInt(parts[1]);
+                                        mails = storage.retrieve(loggedInUser);
+                                        if (id > mails.size() || id < 1)
+                                            throw new ProtocolException("unknown message id");
+                                        response = mails.get(id - 1).toString();
+                                    } catch (NumberFormatException e) {
+                                        throw new ProtocolException("message id not a number");
+                                    }
+                                    break;
+                                case "delete":
+                                    if (parts.length != 2) throw new ProtocolException("1 argument expected");
+                                    try {
+                                        int id = Integer.parseInt(parts[1]);
+                                        mails = storage.retrieve(loggedInUser);
+                                        if (id > mails.size() || id < 1)
+                                            throw new ProtocolException("unknown message id");
+                                        mails.remove(id - 1);
+                                        response = "ok";
+                                    } catch (NumberFormatException e) {
+                                        throw new ProtocolException("message id not a number");
+                                    }
+                                    break;
+                            }
                         }
+                    } catch (ProtocolException e) {
+                        response = String.format("error %s", e.getMessage());
                     }
-                } catch (ProtocolException e) {
-                    response = String.format("error %s", e.getMessage());
+
+                    LOG.info("Response (plain): " + response);
+
+                    if (aesCipher != null) {
+                        response = aesCipher.encrypt(response);
+                        LOG.info("Response (encrypted): " + response);
+                    }
+
+                    writer.println(response);
+                    writer.flush();
                 }
-
-                LOG.info("Response (plain): " + response);
-
-                if (secureChannel != null) {
-                    response = secureChannel.encrypt(response);
-                    LOG.info("Response (encrypted): " + response);
-                }
-
-                writer.println(response);
-                writer.flush();
             }
 
         } catch (SocketException e) {
@@ -168,11 +169,10 @@ public class MailboxDMAPThread implements Runnable {
         }
     }
 
-    private SecureChannelServer handshake(PrintWriter writer, BufferedReader reader) throws
+    private AESCipher handshake(PrintWriter writer, BufferedReader reader) throws
             IOException, NoSuchPaddingException, NoSuchAlgorithmException,
             InvalidAlgorithmParameterException, InvalidKeyException,
             IllegalBlockSizeException, BadPaddingException {
-
 
 
         // send (plain) ok <component-id> -> find server's pub key
@@ -185,22 +185,34 @@ public class MailboxDMAPThread implements Runnable {
 
         if (!split[0].equals("ok") || split.length != 4) throw new IllegalArgumentException("Illegal challenge request");
 
-        secureChannel = new SecureChannelServer(
+        aesCipher = new AESCipher(
                 new SecretKeySpec(Base64.getDecoder().decode(split[2]), "AES"),
-                split[3].getBytes());
+                Base64.getDecoder().decode(split[3]));
 
         // send (AES) ok <client-challenge> -> send decrypted challenge back
-        String response = secureChannel.encrypt("ok " + split[2]);
+        String response = aesCipher.encrypt("ok " +
+                split[1]);
+//                new String(Base64.getDecoder().decode(split[1]), StandardCharsets.UTF_8));
         LOG.info("Sending solved challenge: " + response);
-        writer.println(secureChannel.encrypt("ok " + split[2]));
+        writer.println(response);
         writer.flush();
 
-        // get  (AES) ok -> client accepts handshake
-        String request = secureChannel.decrypt(reader.readLine());
+        // get  (AES) ok -> client accepts handshakee
+        String request = reader.readLine();
+        LOG.info("Handshake accept (encrypted): " + request);
+        request = aesCipher.decrypt(request);
+        LOG.info("Handshake accept (decrypted): " + request);
+
+//        String test = "testing";
+//        LOG.info(test);
+//        String testEncrypted = aesCipher.encrypt(test);
+//        LOG.info(testEncrypted);
+//        String testDecrypted = aesCipher.decrypt(testEncrypted);
+//        LOG.info("Decrypted: " + testDecrypted);
 
         if (!request.equals("ok")) throw new SecurityException("Handshake accept contained wrong response");
 
-        return secureChannel;
+        return aesCipher;
     }
 
     private String solveChallenge(String challenge) throws
@@ -211,7 +223,7 @@ public class MailboxDMAPThread implements Runnable {
 
         PrivateKey privateKey = Keys.readPrivateKey(new File("keys/server/" + componentId + ".der"));
 
-        Cipher decrypterRSA = Cipher.getInstance("RSA");
+        Cipher decrypterRSA = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         decrypterRSA.init(Cipher.DECRYPT_MODE, privateKey);
 
 //        try {

@@ -9,16 +9,16 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.Base64;
 
-public class SecureChannelServer {
+public class AESCipher {
 
     private final Cipher encrypter;
     private final Cipher decrypter;
     private final Base64.Encoder encoder;
     private final Base64.Decoder decoder;
-    private static final Log LOG = LogFactory.getLog(SecureChannelServer.class);
-    private final static String TRANSFORMATION = "AES";
+    private static final Log LOG = LogFactory.getLog(AESCipher.class);
+    private final static String TRANSFORMATION = "AES/CTR/NoPadding";
 
-    public SecureChannelServer(Key key, byte[] iv) throws
+    public AESCipher(Key key, byte[] iv) throws
             InvalidAlgorithmParameterException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException {
 
         encrypter = Cipher.getInstance(TRANSFORMATION);
