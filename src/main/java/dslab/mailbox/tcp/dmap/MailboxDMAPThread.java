@@ -102,7 +102,7 @@ public class MailboxDMAPThread implements Runnable {
                                             MailEntity mail = mails.get(i);
                                             entries.add(String.format("%d %s %s", i + 1, mail.getFrom(), mail.getSubject()));
                                         }
-                                        response = String.join("\n", entries);
+                                        response = String.join("\n", entries) + "\nok";
                                     }
                                     break;
                                 case "logout":
@@ -116,7 +116,7 @@ public class MailboxDMAPThread implements Runnable {
                                         mails = storage.retrieve(loggedInUser);
                                         if (id > mails.size() || id < 1)
                                             throw new ProtocolException("unknown message id");
-                                        response = mails.get(id - 1).toString();
+                                        response = mails.get(id - 1).toString() + "\nok";
                                     } catch (NumberFormatException e) {
                                         throw new ProtocolException("message id not a number");
                                     }

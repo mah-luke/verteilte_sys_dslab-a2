@@ -62,12 +62,13 @@ public class DMTPProtocol {
 
                     // ASK: Check for hash if hash was given during transmission
                     //  (given test requires possibility to send without hash)
-                    if (hash == null) LOG.warn("No hash was given for transmission (deprecated from DMTP1.0). " +
-                            "Future versions may require the new DMTP2.0 format with a hash.");
-                    else {
-                        if (!ret.checkHash(hash)) throw new SecurityException("Hash not compatible with Mail");
-                        else LOG.info("Transmission successfully authenticated via hash.");
-                    }
+                    //if (hash == null) LOG.warn("No hash was given for transmission (deprecated from DMTP1.0). " +
+                    //        "Future versions may require the new DMTP2.0 format with a hash.");
+                    //else {
+                    //    //TODO: this is bad
+                    //    //if (!ret.checkHash(hash)) throw new SecurityException("Hash not compatible with Mail");
+                    //    //else LOG.info("Transmission successfully authenticated via hash.");
+                    //}
 
                     return ret;
                 } else if (command.equals("quit")) {
@@ -98,6 +99,7 @@ public class DMTPProtocol {
                                 break;
                             case "hash":
                                 hash = parser.hash(content);
+                                mailEntity.setHash(hash);
                                 break;
                         }
 

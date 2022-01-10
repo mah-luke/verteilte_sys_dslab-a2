@@ -35,7 +35,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 public class MessageClient implements IMessageClient, Runnable {
 
@@ -146,6 +148,10 @@ public class MessageClient implements IMessageClient, Runnable {
             String res = sendDmap(String.format("login %s %s", config.getString("mailbox.user"), config.getString("mailbox.password")));
             if (!res.startsWith("ok")) throw new ProtocolException(res);
 
+            //msg("arthur@earth.planet","sub1","data1");
+            //msg("arthur@earth.planet","sub2","data2");
+            //msg("arthur@earth.planet","sub3","data3");
+
         } catch (ProtocolException e) {
             shell.out().println(e.getMessage());
         } catch (IOException e) {
@@ -168,11 +174,34 @@ public class MessageClient implements IMessageClient, Runnable {
 
     }
 
+    public String hash(String value) {
+        File secretKeyFile = new File("keys/hmac.key");
+        try {
+            SecretKeySpec keySpec = Keys.readSecretKey(secretKeyFile);
+
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(keySpec);
+
+            byte[] resBytes = mac.doFinal(value.getBytes());
+            return Base64.getEncoder().encodeToString(resBytes);
+        } catch (Exception e) {
+            // Don't catch as invalid setup would make it impossible to use the DMTP2.0 protocol at all
+            throw new RuntimeException("Error during hash creation", e);
+        }
+    }
+
     @Override
     @Command
     public void inbox() {
         String res = sendDmap("list");
-        shell.out().println(res);
+        String []lines = res.split("\n");
+        for (String line: lines) {
+            if(line.equals("ok")) break;
+            String res2 = sendDmap("show " + line.split("\\s")[0]);
+            if(res2.endsWith("\nok"))
+                shell.out().println(res2.substring(0,res2.length()-3));
+        }
+        //shell.out().println(res);
     }
 
     @Override
@@ -186,19 +215,12 @@ public class MessageClient implements IMessageClient, Runnable {
     @Command
     public void verify(String id) {
         String res = sendDmap("show " + id);
-        Pattern p = Pattern.compile("^From: \t\t(?<from>.*)\nTo: \t\t(?<to>.*)\nSubject: \t(?<subject>.*)\nData: \t\t(?<data>.*)$");
+        Pattern p = Pattern.compile("^From: \t\t(?<from>.*)\nTo: \t\t(?<to>.*)\nSubject: \t(?<subject>.*)\nData: \t\t(?<data>.*)\nHash: \t\t(?<hash>.*)$");
         Matcher m = p.matcher(res);
-        MailEntity mail = new MailEntity();
         if (m.find()) {
-            mail.setFrom(m.group("from"));
-            List<String> list = Arrays.asList(m.group("to").split(","));
-            list.replaceAll(String::strip);
-            Set<String> addresses = new HashSet<>(list);
-            mail.setTo(addresses);
-            mail.setSubject(m.group("subject"));
-            mail.setData(m.group("data"));
-            shell.out().println(mail);
-            shell.out().println(mail.hash());
+            String all = String.join("\n", m.group("from"), m.group("to"), m.group("subject"), m.group("data"));
+            String hash = m.group("hash");
+            shell.out().println(hash(all).equals(hash));
         } else {
             shell.out().println("error could not match regex to string");
         }
@@ -207,27 +229,8 @@ public class MessageClient implements IMessageClient, Runnable {
     @Override
     @Command
     public void msg(String to, String subject, String data) {
-        MailEntity mail = new MailEntity();
-        mail.setFrom(email);
-        mail.setData(data);
-        mail.setSubject(subject);
-        List<String> list = Arrays.asList(to.split(","));
-        list.replaceAll(String::strip);
-        Set<String> addresses = new HashSet<>(list);
-        mail.setTo(addresses);
+        String all = String.join("\n", email, to, subject, data);
 
-        try {
-            sendDmtp(mail);
-        } catch (ProtocolException e) {
-            shell.out().println(e.getMessage());
-            return;
-        }
-        shell.out().println("ok");
-
-
-    }
-
-    public void sendDmtp(MailEntity mail) throws ProtocolException {
         Socket socket = null;
         try {
             socket = new Socket(config.getString("transfer.host"), config.getInt("transfer.port"));
@@ -235,16 +238,18 @@ public class MessageClient implements IMessageClient, Runnable {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                  PrintWriter writer = new PrintWriter(socket.getOutputStream())) {
                 send("begin", reader, writer);
-                send("from " + mail.getFrom(), reader, writer);
-                send("to " + String.join(", ", mail.getTo()), reader, writer);
-                send("subject " + mail.getSubject(), reader, writer);
-                send("data " + mail.getData(), reader, writer);
-                send("hash " + mail.hash(), reader, writer);
+                send("from " + email, reader, writer);
+                send("to " + to, reader, writer);
+                send("subject " + subject, reader, writer);
+                send("data " + data, reader, writer);
+                send("hash " +hash(all), reader, writer);
                 send("send", reader, writer);
                 send("quit", reader, writer);
+                shell.out().println("ok");
             }
         } catch (ProtocolException e) {
-            throw e;
+            LOG.info(e.getMessage());
+            shell.out().println(e.getMessage());
         } catch (UnknownHostException e) {
             e.printStackTrace();
         } catch (
