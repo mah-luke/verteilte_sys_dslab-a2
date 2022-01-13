@@ -1,6 +1,7 @@
 package dslab.transfer.tcp.dmtp;
 
 import dslab.entity.MailEntity;
+import dslab.nameserver.INameserverRemote;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -10,27 +11,23 @@ import java.net.ProtocolException;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.rmi.RemoteException;
 import java.util.HashSet;
 import java.util.Set;
 
 public class DMTPClientThread implements Runnable {
 
     private final MailEntity mail;
-    private final String host;
-    private final int port;
-    private final String senderHost;
-    private final int senderPort;
+    private final String server;
     private Socket socket;
     private final Log LOG = LogFactory.getLog(DMTPClientThread.class);
     private String serverIP;
+    private final INameserverRemote nameserver;
 
-    public DMTPClientThread(MailEntity mail, String host, int port, String senderHost, int senderPort) {
+    public DMTPClientThread(MailEntity mail,INameserverRemote nameserver, String server) {
         this.mail = mail;
-        this.host = host;
-        this.port = port;
-        this.senderHost = senderHost;
-        this.senderPort = senderPort;
-
+        this.server = server;
+        this.nameserver = nameserver;
         try {
             this.serverIP = InetAddress.getLocalHost().getHostAddress();
         } catch (UnknownHostException e) {
@@ -38,13 +35,28 @@ public class DMTPClientThread implements Runnable {
         }
     }
 
+    private String[] getAd(String server) throws RemoteException {
+        String[] domain = server.split("\\.");
+        INameserverRemote currentNameserver = nameserver;
+        for (int i = domain.length - 1; i > 0; i--) {
+            currentNameserver = currentNameserver.getNameserver(domain[i]);
+        }
+        String[] location = currentNameserver.lookup(domain[0]).split(":");
+        LOG.info(location[0] + ":" + location[1]);
+
+        return location;
+        //String[] location = config.getString(server).split(":");
+    }
+
     @Override
     public void run() {
         try {
-            sendAsClient(mail, host, port);
+            String[] location = getAd(server);
+            sendAsClient(mail, location[0], Integer.parseInt(location[1]));
         } catch (Exception e) {
             try {
-                sendAsClient(generateErrorMail(e.getMessage()), senderHost, senderPort);
+                String[] location = getAd(mail.getFrom().split("@")[1]);
+                sendAsClient(generateErrorMail(e.getMessage()), location[0], Integer.parseInt(location[1]));
             } catch (Exception f) {
                 LOG.info("Failed to send error message");
             }

@@ -15,8 +15,6 @@ import at.ac.tuwien.dsg.orvell.Shell;
 import at.ac.tuwien.dsg.orvell.StopShellException;
 import at.ac.tuwien.dsg.orvell.annotation.Command;
 import dslab.ComponentFactory;
-import dslab.entity.MailEntity;
-import dslab.protocol.dmtp.DMTPParser;
 import dslab.security.AESCipher;
 import dslab.util.Config;
 import dslab.util.Keys;

@@ -2,11 +2,16 @@ package dslab.transfer;
 
 import java.io.*;
 import java.net.ServerSocket;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 
 import at.ac.tuwien.dsg.orvell.Shell;
 import at.ac.tuwien.dsg.orvell.StopShellException;
 import at.ac.tuwien.dsg.orvell.annotation.Command;
 import dslab.ComponentFactory;
+import dslab.nameserver.INameserverRemote;
 import dslab.transfer.tcp.dmtp.TransferListenerThread;
 import dslab.util.Config;
 import org.apache.commons.logging.Log;
@@ -24,6 +29,9 @@ public class TransferServer implements ITransferServer, Runnable {
     private MessageForwardingListener forwarder;
     private final Log LOG = LogFactory.getLog(TransferServer.class);
 
+
+    private Registry registry;
+    private INameserverRemote nameserver;
     /**
      * Creates a new server instance.
      *
@@ -41,12 +49,26 @@ public class TransferServer implements ITransferServer, Runnable {
 
     @Override
     public void run() {
+
         LOG.info("TransferServer starting...");
+        try {
+            registry = LocateRegistry.getRegistry(
+                    config.getString("registry.host"),
+                    config.getInt("registry.port")
+            );
+            nameserver = (INameserverRemote) registry.lookup(config.getString("root_id"));
+            LOG.info("Nameserver found");
+        } catch (RemoteException e) {
+            LOG.warn("Commmunication with registry not possible", e);
+        } catch (NotBoundException e) {
+            LOG.warn("Nameserver not found", e);
+        }
+
         try {
             serverSocket = new ServerSocket(config.getInt("tcp.port"));
 
             // Create a forwarder that handles all outgoing messages.
-            forwarder = new MessageForwardingListener(serverSocket.getInetAddress().getHostAddress(), config);
+            forwarder = new MessageForwardingListener(serverSocket.getInetAddress().getHostAddress(), config, nameserver);
 
             // each TransferServer has its own forwarding thread.
             // If the forwarding becomes a bottleneck, the single thread can be replaced by a ThreadPool.

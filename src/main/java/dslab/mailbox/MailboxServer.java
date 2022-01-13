@@ -1,7 +1,9 @@
 package dslab.mailbox;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.UnknownHostException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -39,6 +41,7 @@ public class MailboxServer implements IMailboxServer, Runnable {
     private final static Log LOG = LogFactory.getLog(MailboxServer.class);
 
 
+    private String serverIP;
     /**
      * Creates a new server instance.
      *
@@ -54,6 +57,12 @@ public class MailboxServer implements IMailboxServer, Runnable {
         this.out = out;
 
         this.storage = new MailStorage(config.getString("domain"));
+
+        try {
+            this.serverIP = InetAddress.getLocalHost().getHostAddress();
+        } catch (UnknownHostException e) {
+            this.serverIP = "127.0.0.1";
+        }
     }
 
     @Override
@@ -84,8 +93,10 @@ public class MailboxServer implements IMailboxServer, Runnable {
 
             LOG.info("Nameserver found");
 
+            //serverSocket.getLocalSocketAddress()
+            //TODO: change maybe to: serverSocket.getInetAddress().getHostAddress() serverSocket.getLocalSocketAddress()
             nameserver.registerMailboxServer(config.getString("domain"),
-                    serverSocket.getLocalSocketAddress() + ":" + serverSocket.getLocalPort());
+                     serverIP + ":" + serverSocket.getLocalPort());
 
             LOG.info("Registration on Nameserver successful");
         } catch (RemoteException e) {
