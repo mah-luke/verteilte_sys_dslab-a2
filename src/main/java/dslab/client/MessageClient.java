@@ -16,6 +16,7 @@ import at.ac.tuwien.dsg.orvell.StopShellException;
 import at.ac.tuwien.dsg.orvell.annotation.Command;
 import dslab.ComponentFactory;
 import dslab.entity.MailEntity;
+import dslab.protocol.dmtp.DMTPParser;
 import dslab.security.AESCipher;
 import dslab.util.Config;
 import dslab.util.Keys;
@@ -77,7 +78,7 @@ public class MessageClient implements IMessageClient, Runnable {
             this.dmapWriter = new PrintWriter(socketDmap.getOutputStream());
 
             String response = dmapReader.readLine();
-                if (!response.startsWith("ok DMAP2.0")) throw new ProtocolException("Bad response");
+            if (!response.startsWith("ok DMAP2.0")) throw new ProtocolException("Bad response");
             //shell.out().println(response);
             startsecure();
         } catch (IOException e) {
@@ -148,10 +149,6 @@ public class MessageClient implements IMessageClient, Runnable {
             String res = sendDmap(String.format("login %s %s", config.getString("mailbox.user"), config.getString("mailbox.password")));
             if (!res.startsWith("ok")) throw new ProtocolException(res);
 
-            //msg("arthur@earth.planet","sub1","data1");
-            //msg("arthur@earth.planet","sub2","data2");
-            //msg("arthur@earth.planet","sub3","data3");
-
         } catch (ProtocolException e) {
             shell.out().println(e.getMessage());
         } catch (IOException e) {
@@ -169,9 +166,8 @@ public class MessageClient implements IMessageClient, Runnable {
 
             return aesCipher.decrypt(dmapReader.readLine());
         } catch (IOException e) {
-            return "Error with input output stream";
+            return "Error while trying to write to sever";
         }
-
     }
 
     public String hash(String value) {
@@ -193,13 +189,18 @@ public class MessageClient implements IMessageClient, Runnable {
     @Override
     @Command
     public void inbox() {
+        boolean linebreak = false;
         String res = sendDmap("list");
-        String []lines = res.split("\n");
-        for (String line: lines) {
-            if(line.equals("ok")) break;
-            String res2 = sendDmap("show " + line.split("\\s")[0]);
-            if(res2.endsWith("\nok"))
-                shell.out().println(res2.substring(0,res2.length()-3));
+        String[] lines = res.split("\n");
+        for (String line : lines) {
+            if (line.equals("ok")) break;
+            String number = line.split("\\s")[0];
+            String res2 = sendDmap("show " + number);
+            if (res2.endsWith("\nok"))
+                if (linebreak) shell.out().println();
+            linebreak = true;
+            shell.out().println("Number: \t" + number);
+            shell.out().println(res2.substring(0, res2.length() - 3));
         }
         //shell.out().println(res);
     }
@@ -215,7 +216,7 @@ public class MessageClient implements IMessageClient, Runnable {
     @Command
     public void verify(String id) {
         String res = sendDmap("show " + id);
-        Pattern p = Pattern.compile("^From: \t\t(?<from>.*)\nTo: \t\t(?<to>.*)\nSubject: \t(?<subject>.*)\nData: \t\t(?<data>.*)\nHash: \t\t(?<hash>.*)$");
+        Pattern p = Pattern.compile("^From: \t\t(?<from>.*)\nTo: \t\t(?<to>.*)\nSubject: \t(?<subject>.*)\nData: \t\t(?<data>.*)\nHash: \t\t(?<hash>.*)\nok$");
         Matcher m = p.matcher(res);
         if (m.find()) {
             String all = String.join("\n", m.group("from"), m.group("to"), m.group("subject"), m.group("data"));
@@ -226,10 +227,22 @@ public class MessageClient implements IMessageClient, Runnable {
         }
     }
 
+
     @Override
     @Command
     public void msg(String to, String subject, String data) {
-        String all = String.join("\n", email, to, subject, data);
+        //formatting to
+        List<String> list = Arrays.asList(to.split(","));
+        list.replaceAll(String::strip);
+        Set<String> addresses = new HashSet<>(list);
+        for (String address : addresses) {
+            if (address.split("@").length != 2) {
+                shell.out().println("Argument of command 'to' must be in the format '<user>@<hostname>, <user1>@<hostname1>, ...'");
+                return;
+            }
+        }
+        String toFormat = String.join(",", addresses);
+        String all = String.join("\n", email, toFormat, subject, data);
 
         Socket socket = null;
         try {
@@ -239,10 +252,10 @@ public class MessageClient implements IMessageClient, Runnable {
                  PrintWriter writer = new PrintWriter(socket.getOutputStream())) {
                 send("begin", reader, writer);
                 send("from " + email, reader, writer);
-                send("to " + to, reader, writer);
+                send("to " + toFormat, reader, writer);
                 send("subject " + subject, reader, writer);
                 send("data " + data, reader, writer);
-                send("hash " +hash(all), reader, writer);
+                send("hash " + hash(all), reader, writer);
                 send("send", reader, writer);
                 send("quit", reader, writer);
                 shell.out().println("ok");
@@ -280,10 +293,9 @@ public class MessageClient implements IMessageClient, Runnable {
 
     //closes all allocated resources
     private void cleanup() {
-        if(aesCipher!= null) sendDmap("logout");
-
         if (socketDmap != null && !socketDmap.isClosed()) {
             try {
+                sendDmap("logout");
                 socketDmap.close();
             } catch (IOException e) {
                 // Ignored because we cannot handle it
