@@ -69,25 +69,20 @@ public class MessageClient implements IMessageClient, Runnable {
     @Override
     public void run() {
         this.email = config.getString("transfer.email");
+        startsecure();
+        shell.run();
+    }
+
+    public void startsecure() {
         try {
             //dmap connect start in the beginning and runs throughout the session
             socketDmap = new Socket(config.getString("mailbox.host"), config.getInt("mailbox.port"));
             this.dmapReader = new BufferedReader(new InputStreamReader(socketDmap.getInputStream()));
             this.dmapWriter = new PrintWriter(socketDmap.getOutputStream());
 
-            String response = dmapReader.readLine();
-            if (!response.startsWith("ok DMAP2.0")) throw new ProtocolException("Bad response");
-            //shell.out().println(response);
-            startsecure();
-        } catch (IOException e) {
-            cleanup();
-            throw new UncheckedIOException("Error while creating socket", e);
-        }
-        shell.run();
-    }
+            String firstResponse = dmapReader.readLine();
+            if (!firstResponse.startsWith("ok DMAP2.0")) throw new ProtocolException("Bad response");
 
-    public void startsecure() {
-        try {
             //begin protocol
             dmapWriter.println("startsecure");
             dmapWriter.flush();
@@ -147,24 +142,22 @@ public class MessageClient implements IMessageClient, Runnable {
             String res = sendDmap(String.format("login %s %s", config.getString("mailbox.user"), config.getString("mailbox.password")));
             if (!res.startsWith("ok")) throw new ProtocolException(res);
 
-        } catch (ProtocolException e) {
-            shell.out().println(e.getMessage());
-        } catch (IOException e) {
-            e.printStackTrace();
         } catch (Exception e) {
-            //if this is reached then there is something wrong with the code itself. As in wrong data is used for key gen etc.
-            throw new IllegalArgumentException();
+            shell.out().println("Couldn't connect to mail server");
+            cleanup();
         }
     }
 
-    private String sendDmap(String line) {
+    private String sendDmap(String line) throws IOException {
+        if (socketDmap == null || socketDmap.isClosed())
+            throw new IOException("socket closed");
         try {
             dmapWriter.println(aesCipher.encrypt(line));
             dmapWriter.flush();
 
             return aesCipher.decrypt(dmapReader.readLine());
-        } catch (IOException e) {
-            return "Error while trying to write to sever";
+        } catch (Exception e) {
+            return "Error while trying to write to server";
         }
     }
 
@@ -188,12 +181,29 @@ public class MessageClient implements IMessageClient, Runnable {
     @Command
     public void inbox() {
         boolean linebreak = false;
-        String res = sendDmap("list");
+        String res;
+        try {
+            res = sendDmap("list");
+        } catch (Exception e) {
+            shell.out().println("error");
+            return;
+        }
+        if (!res.endsWith("ok")) {
+            shell.out().println("Couldn't read mailbox");
+            return;
+        }
         String[] lines = res.split("\n");
+
         for (String line : lines) {
-            if (line.equals("ok")) break;
+            if (line.equals("ok") || line.length() < 1) break;
             String number = line.split("\\s")[0];
-            String res2 = sendDmap("show " + number);
+            String res2;
+            try {
+                res2 = sendDmap("show " + number);
+            } catch (Exception e) {
+                shell.out().println("error");
+                return;
+            }
             if (res2.endsWith("\nok"))
                 if (linebreak) shell.out().println();
             linebreak = true;
@@ -206,14 +216,26 @@ public class MessageClient implements IMessageClient, Runnable {
     @Override
     @Command
     public void delete(String id) {
-        String res = sendDmap("delete " + id);
+        String res;
+        try {
+            res = sendDmap("delete " + id);
+        } catch (Exception e) {
+            shell.out().println("error");
+            return;
+        }
         shell.out().println(res);
     }
 
     @Override
     @Command
     public void verify(String id) {
-        String res = sendDmap("show " + id);
+        String res;
+        try {
+            res = sendDmap("show " + id);
+        } catch (Exception e) {
+            shell.out().println("error");
+            return;
+        }
         Pattern p = Pattern.compile("^From: \t\t(?<from>.*)\nTo: \t\t(?<to>.*)\nSubject: \t(?<subject>.*)\nData: \t\t(?<data>.*)\nHash: \t\t(?<hash>.*)\nok$");
         Matcher m = p.matcher(res);
         if (m.find()) {

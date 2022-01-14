@@ -89,11 +89,13 @@ public class NameserverRemote implements INameserverRemote {
 
     @Override
     public INameserverRemote getNameserver(String zone) throws RemoteException {
+        LOG.info("getNameserver called for zone: " + zone);
         return entity.getZones().get(zone);
     }
 
     @Override
     public String lookup(String username) throws RemoteException {
+        LOG.info("getNameserver called for : " + username);
         return entity.getMailservers().get(username);
     }
 }
