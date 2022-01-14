@@ -16,6 +16,11 @@ public class MailEntity {
     private Set<String> to;
     private String subject;
     private String data;
+    private String hash = "";
+
+    public String getHash() {return hash;}
+
+    public void setHash(String hash) {this.hash = hash;}
 
     public MailEntity() {
         to = new HashSet<>();
@@ -77,7 +82,7 @@ public class MailEntity {
         List<String> list = new ArrayList<>();
 
         list.add(from);
-        list.add(String.join(", ", to));
+        list.add(String.join(",", to));
         list.add(subject);
         list.add(data);
 
@@ -88,9 +93,10 @@ public class MailEntity {
     public String toString() {
         String ret = "";
         ret += String.format("From: \t\t%s\n", from);
-        ret += String.format("To: \t\t%s\n", String.join(", ", to));
+        ret += String.format("To: \t\t%s\n", String.join(",", to));
         ret += String.format("Subject: \t%s\n", subject);
-        ret += String.format("Data: \t\t%s", data);
+        ret += String.format("Data: \t\t%s\n", data);
+        ret += String.format("Hash: \t\t%s",hash);
         return ret;
     }
 

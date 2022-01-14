@@ -1,6 +1,7 @@
 package dslab.transfer;
 
 import dslab.entity.MailEntity;
+import dslab.nameserver.INameserverRemote;
 import dslab.util.Config;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -23,9 +24,11 @@ public class MessageForwardingListener extends Thread {
     // Flag whether the thread is currently blocking
     private boolean isBlocking = false;
 
+    private INameserverRemote nameserver;
 
-    MessageForwardingListener(String hostAddress, Config serverConfig) {
+    MessageForwardingListener(String hostAddress, Config serverConfig, INameserverRemote nameserver) {
         this.serverConfig = serverConfig;
+        this.nameserver = nameserver;
     }
 
     @Override
@@ -37,7 +40,7 @@ public class MessageForwardingListener extends Thread {
                 isBlocking = false;
 
                 LOG.info("Mail " + mail.getSubject() + " taken from queue for forwarding");
-                executor.execute(new MessageForwardingThread(mail, serverConfig));
+                executor.execute(new MessageForwardingThread(mail, serverConfig,nameserver));
             }
         } catch (InterruptedException e) {
             LOG.info("Forwarder stopped");
