@@ -96,13 +96,17 @@ public class MailboxDMAPThread implements Runnable {
                             switch (command) {
                                 case "list":
                                     if (parts.length != 1) throw new ProtocolException("0 arguments expected");
-                                    synchronized (mails = storage.retrieve(loggedInUser)) {
-                                        List<String> entries = new ArrayList<>();
-                                        for (int i = 0; i < mails.size(); i++) {
-                                            MailEntity mail = mails.get(i);
-                                            entries.add(String.format("%d %s %s", i + 1, mail.getFrom(), mail.getSubject()));
+                                    try{
+                                        synchronized (mails = storage.retrieve(loggedInUser)) {
+                                            List<String> entries = new ArrayList<>();
+                                            for (int i = 0; i < mails.size(); i++) {
+                                                MailEntity mail = mails.get(i);
+                                                entries.add(String.format("%d %s %s", i + 1, mail.getFrom(), mail.getSubject()));
+                                            }
+                                            response = String.join("\n", entries) + "\nok";
                                         }
-                                        response = String.join("\n", entries) + "\nok";
+                                    } catch (IllegalArgumentException e){
+                                        response = "ok";
                                     }
                                     break;
                                 case "logout":

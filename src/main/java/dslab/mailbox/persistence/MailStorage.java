@@ -25,8 +25,10 @@ public class MailStorage {
         }
     }
 
-    public List<MailEntity> retrieve(String user) {
-        return storage.get(user);
+    public List<MailEntity> retrieve(String user){
+        List<MailEntity> mails = storage.get(user);
+        if(mails == null) throw new IllegalArgumentException("No inbox for this user");
+        return mails;
     }
 
     public String toString() {

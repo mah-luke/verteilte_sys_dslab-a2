@@ -29,6 +29,7 @@ public class MailboxDMTPParser extends DefaultDMTPParser {
 
         if (addresses.size() == 0) throw new ProtocolException("unknown recipient");
 
-        return addresses;
+        //TODO: changed from addresses
+        return super.to(request);
     }
 }
